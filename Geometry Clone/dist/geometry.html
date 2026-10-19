@@ -52,7 +52,7 @@ const JUMP_REF = [[1.955, 100, 3.49], [2.128, 103, 4.457], [2.232, 106, 5.70], [
 const MAX_CATCHUP_MS = 100;   // never try to "catch up" more than this (tab was hidden / slow frame)
 const TRAIL_MAX = 160, TRAIL_EVERY = 4;   // keep every 4th tick (60 Hz) -> at most 160 points
 const CAPS = [[0, 'Unlimited (display rate)'], [30, '30'], [60, '60'], [90, '90'], [120, '120'], [144, '144'], [165, '165'], [240, '240'], [360, '360'], [480, '480'], [1000, '1000']];
-const EXTRAP = ['Off', 'Smooth', 'Predict'];   // Smooth: to the current time; Predict: to the estimated display time
+const EXTRAP = ['Off', 'Smooth'];   // Smooth: extrapolate to the current time only (less than one tick ahead)
 
 const $ = id => document.getElementById(id);
 function b64ToBytes(b64) { const bin = atob(b64), o = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) o[i] = bin.charCodeAt(i); return o; }
@@ -102,7 +102,7 @@ class Pipeline {
   let maxY = 0, lastApex = -1, airTicks = 0, lastAir = -1, wasGround = true, jumps = 0, sinceTrail = 0;
   const trailX = new Float32Array(TRAIL_MAX), trailY = new Float32Array(TRAIL_MAX); let trailN = 0, trailHead = 0;
   // perf counters
-  let fpsAcc = 0, fpsN = 0, worstMs = 0, simMsAcc = 0, drawMsAcc = 0, ticksAcc = 0, lastFrame = performance.now(), tpsStart = performance.now(), tpsTicks = 0, frameEma = 16.7;
+  let fpsAcc = 0, fpsN = 0, worstMs = 0, simMsAcc = 0, drawMsAcc = 0, ticksAcc = 0, lastFrame = performance.now(), tpsStart = performance.now(), tpsTicks = 0;
   let perf = { frameMs: 16.7, fps: 60, simMs: 0, drawMs: 0, ticksPerFrame: 4, worstMs: 0, inputLagMs: 0, tps: 240 };
 
   function tickOnce(held) {
@@ -238,10 +238,10 @@ class Pipeline {
     const tSim = Math.min(now, t0);                               // rAF timestamp can be slightly ahead of now()
     const n = pipe.beginFrame(tSim);
     const t1 = performance.now();
-    draw(extrapMode === 2 ? tSim + frameEma : tSim);               // Predict: aim at when this frame will actually be shown
+    draw(tSim);
     const t2 = performance.now();
     const fdt = now - lastFrame; lastFrame = now;
-    if (fdt > 0 && fdt < 1000) { fpsAcc += fdt; fpsN++; frameEma += (fdt - frameEma) * 0.1; if (fdt > worstMs) worstMs = fdt; }
+    if (fdt > 0 && fdt < 1000) { fpsAcc += fdt; fpsN++; if (fdt > worstMs) worstMs = fdt; }
     simMsAcc += t1 - t0; drawMsAcc += t2 - t1; ticksAcc += n;
     if (now - statAt > 125) {
       if (fpsN) { const tt = performance.now(); perf = { frameMs: fpsAcc / fpsN, fps: 1000 * fpsN / fpsAcc, simMs: simMsAcc / fpsN, drawMs: drawMsAcc / fpsN, ticksPerFrame: ticksAcc / fpsN, worstMs, tps: perf.tps }; if (tt - tpsStart >= 500) { perf.tps = tpsTicks * 1000 / (tt - tpsStart); tpsStart = tt; tpsTicks = 0; } }

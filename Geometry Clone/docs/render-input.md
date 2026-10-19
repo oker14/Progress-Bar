@@ -12,8 +12,8 @@ Physics is **fixed at 240 Hz in every mode**. Render rate, extrapolation and inp
 ## Frame extrapolation (visual only)
 `Sim::extrapolate(ticks)` in the core predicts the cube position a fractional number of ticks after the last real tick (exact gravity model; clamped to the floor). The renderer draws that instead of the raw state.
 - **Off** — draw the last simulated tick.
-- **Smooth** (default) — extrapolate to the current time (at most one tick, ~4 ms): removes tick-boundary stutter at high refresh rates.
-- **Predict** — extrapolate to the estimated moment the frame is displayed (~1 frame ahead): lowest perceived latency, but can briefly overshoot at a landing or a just-pressed jump.
+- **Smooth** (default) — extrapolate to the current time only (always less than one tick, ~4 ms, ahead): removes tick-boundary stutter at high refresh rates and never shows a position the sim has not reached.
+A more aggressive "Predict to display time" mode (~1 frame ahead) was built and removed: it can draw frames that never happen (overshoot at landings and fresh jumps).
 Extrapolation never feeds back into the sim (tested: it leaves the state hash untouched, and in free flight it equals real stepping to ~1e-14 units). Once objects exist (step 4), the renderer must clamp predicted positions against solids.
 
 ## Click-between-frames (on by default)
