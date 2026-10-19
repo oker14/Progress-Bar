@@ -2,43 +2,150 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
 <title>Geometry Clone</title>
 <style>
-  body { margin: 0; background: #111; color: #eee; font: 16px/1.5 monospace; padding: 16px; }
-  pre { white-space: pre-wrap; }
+  html, body { margin: 0; height: 100%; background: #0d1020; color: #dfe6ff; font: 14px/1.45 ui-monospace, Menlo, Consolas, monospace; overflow: hidden; touch-action: none; }
+  #wrap { display: flex; flex-direction: column; height: 100%; }
+  canvas { flex: 1; width: 100%; min-height: 0; display: block; }
+  #panel { padding: 8px 12px 10px; background: #070914; border-top: 1px solid #263; display: grid; gap: 6px; }
+  #stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 2px 14px; }
+  #stats b { color: #ffd84a; font-weight: normal; }
+  .row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+  button { background: #1c2450; color: #dfe6ff; border: 1px solid #3a4890; border-radius: 6px; padding: 6px 10px; font: inherit; cursor: pointer; }
+  button.on { background: #3a4890; border-color: #8fa2ff; }
+  #msg { color: #9fb0ff; }
+  .pass { color: #5f5; } .fail { color: #f55; }
 </style>
 </head>
 <body>
-<h3>Geometry Clone &mdash; step 2 smoke test</h3>
-<pre id="out">loading...</pre>
+<div id="wrap">
+  <canvas id="c"></canvas>
+  <div id="panel">
+    <div id="stats"></div>
+    <div class="row" id="speeds"></div>
+    <div class="row">
+      <button id="reset">Reset (R)</button>
+      <button id="pause">Pause (P)</button>
+      <button id="slow">Slow-mo: off (S)</button>
+      <button id="test">Run self-tests</button>
+      <span id="msg">Hold SPACE / click / touch to jump. Holding keeps re-jumping on landing.</span>
+    </div>
+    <div id="tests"></div>
+  </div>
+</div>
 <script>
-// Everything is inlined so this file works when double-clicked (file://), offline, on a Chromebook.
+// Single self-contained file: physics is the Rust core compiled to WASM, inlined below.
 const WASM_B64 = "__WASM_B64__";
+const GOLDEN_PARITY_HASH = "5284f536a4cc5b87";   // native result of 100,000 parity ticks
 const PARITY_TICKS = 100000;
+const TICK_HZ = 240, UNITS_PER_BLOCK = 30, WIKI_JUMP = 2.1333;
+const SPEEDS = [["0.5x",0],["1x",1],["2x",2],["3x",3],["4x",4]];
 
-function b64ToBytes(b64) {
-  const bin = atob(b64), out = new Uint8Array(bin.length);
-  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
-  return out;
-}
+function b64ToBytes(b64) { const bin = atob(b64), o = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) o[i] = bin.charCodeAt(i); return o; }
+const hex = (w, i) => (BigInt(w.gd_hash_hi(i) >>> 0) << 32n | BigInt(w.gd_hash_lo(i) >>> 0)).toString(16).padStart(16, '0');
+const $ = id => document.getElementById(id);
+
 (async () => {
-  const out = document.getElementById('out');
-  try {
-    const { instance } = await WebAssembly.instantiate(b64ToBytes(WASM_B64), {});
-    const w = instance.exports;
-    if (!w.gd_reset(0, 0, 1)) throw new Error('gd_reset failed');
-    const t0 = performance.now();
-    w.gd_run_parity(0, PARITY_TICKS);
-    const ms = performance.now() - t0;
-    const hash = (BigInt(w.gd_hash_hi(0) >>> 0) << 32n | BigInt(w.gd_hash_lo(0) >>> 0)).toString(16).padStart(16, '0');
-    window.__GD_RESULT__ = { hash, ticks: w.gd_tick(0) };
-    out.textContent = 'wasm ok\nticks: ' + w.gd_tick(0) + '\nstate hash: ' + hash +
-      '\nspeed: ' + (PARITY_TICKS / ms / 1000).toFixed(1) + ' M ticks/s in this browser';
-  } catch (e) {
-    window.__GD_RESULT__ = { error: String(e) };
-    out.textContent = 'FAILED: ' + e;
+  let w;
+  try { w = (await WebAssembly.instantiate(b64ToBytes(WASM_B64), {})).instance.exports; }
+  catch (e) { window.__GD_RESULT__ = { error: String(e) }; $('stats').textContent = 'WASM failed: ' + e; return; }
+
+  const canvas = $('c'), ctx = canvas.getContext('2d');
+  let speed = 1, held = false, paused = false, slow = false, acc = 0, last = performance.now();
+  let maxY = 0, lastApex = null, airTicks = 0, lastAir = null, wasGround = true, jumps = 0;
+  let trail = [];            // recent (x, y) samples of the current/last jump arc, in units
+  const SIM = 1;             // sim slot used by the player; slot 0 is reserved for self-tests
+
+  function reset() { w.gd_reset(SIM, 0, speed); maxY = 0; lastApex = null; lastAir = null; airTicks = 0; wasGround = true; jumps = 0; trail = []; acc = 0; }
+  function resize() { const r = canvas.getBoundingClientRect(), d = devicePixelRatio || 1; canvas.width = r.width * d; canvas.height = r.height * d; }
+  addEventListener('resize', resize); new ResizeObserver(resize).observe(canvas); resize();
+
+  // speed buttons
+  SPEEDS.forEach(([label, v]) => {
+    const b = document.createElement('button'); b.textContent = label; b.dataset.v = v;
+    b.onclick = () => { speed = v; reset(); refreshButtons(); }; $('speeds').appendChild(b);
+  });
+  function refreshButtons() { [...$('speeds').children].forEach(b => b.classList.toggle('on', +b.dataset.v === speed)); $('pause').classList.toggle('on', paused); $('slow').textContent = 'Slow-mo: ' + (slow ? 'on' : 'off') + ' (S)'; $('slow').classList.toggle('on', slow); }
+  $('reset').onclick = reset; $('pause').onclick = () => { paused = !paused; refreshButtons(); }; $('slow').onclick = () => { slow = !slow; refreshButtons(); };
+  addEventListener('keydown', e => {
+    if (e.code === 'Space' || e.code === 'ArrowUp') { e.preventDefault(); held = true; }
+    else if (e.code === 'KeyR') reset(); else if (e.code === 'KeyP') { paused = !paused; refreshButtons(); } else if (e.code === 'KeyS') { slow = !slow; refreshButtons(); }
+    else if (e.code >= 'Digit1' && e.code <= 'Digit5') { speed = +e.code.slice(5) - 1; reset(); refreshButtons(); }
+  });
+  addEventListener('keyup', e => { if (e.code === 'Space' || e.code === 'ArrowUp') held = false; });
+  canvas.addEventListener('pointerdown', () => held = true); addEventListener('pointerup', () => held = false);
+
+  function tickOnce() {
+    w.gd_step(SIM, held ? 1 : 0);
+    const y = w.gd_y(SIM), g = w.gd_on_ground(SIM) === 1;
+    if (!g) { airTicks++; if (y > maxY) maxY = y; trail.push([w.gd_x(SIM), y]); if (trail.length > 900) trail.shift(); }
+    if (g && !wasGround) { lastApex = maxY / UNITS_PER_BLOCK; lastAir = airTicks; maxY = 0; jumps++; }
+    if (g && wasGround) { airTicks = 0; }
+    if (wasGround && !g) { airTicks = 1; maxY = y; trail = [[w.gd_x(SIM), y]]; }
+    wasGround = g;
   }
+
+  function draw() {
+    const d = devicePixelRatio || 1, W = canvas.width, H = canvas.height;
+    const ppu = Math.min(W, H * 1.6) / 240;             // pixels per unit (8 blocks wide ≈ 240 units)
+    const groundY = H * 0.78, camX = w.gd_x(SIM) - W * 0.25 / ppu;
+    const sx = x => (x - camX) * ppu, sy = y => groundY - y * ppu;
+    ctx.fillStyle = '#141a3a'; ctx.fillRect(0, 0, W, H);
+    ctx.fillStyle = '#0a0e24'; ctx.fillRect(0, groundY, W, H - groundY);
+    // block grid: vertical lines every block (30 units) so speed/jump height are readable
+    ctx.strokeStyle = 'rgba(255,255,255,0.07)'; ctx.lineWidth = d;
+    for (let gx = Math.floor(camX / 30) * 30; sx(gx) < W; gx += 30) { ctx.beginPath(); ctx.moveTo(sx(gx), 0); ctx.lineTo(sx(gx), H); ctx.stroke(); }
+    for (let gy = 0; gy <= 6; gy++) { ctx.strokeStyle = gy === 0 ? '#fff' : 'rgba(255,255,255,0.07)'; ctx.beginPath(); ctx.moveTo(0, sy(gy * 30)); ctx.lineTo(W, sy(gy * 30)); ctx.stroke(); ctx.fillStyle = '#6b7ab8'; ctx.font = 11 * d + 'px monospace'; ctx.fillText(gy + ' blk', 4 * d, sy(gy * 30) - 3 * d); }
+    // apex reference lines
+    ctx.setLineDash([6 * d, 6 * d]); ctx.strokeStyle = '#ff6'; ctx.beginPath(); ctx.moveTo(0, sy(WIKI_JUMP * 30)); ctx.lineTo(W, sy(WIKI_JUMP * 30)); ctx.stroke(); ctx.setLineDash([]);
+    ctx.fillStyle = '#ff6'; ctx.fillText('wiki jump 2.1333', W - 120 * d, sy(WIKI_JUMP * 30) - 3 * d);
+    // arc trail
+    if (trail.length > 1) { ctx.strokeStyle = '#4af'; ctx.lineWidth = 2 * d; ctx.beginPath(); trail.forEach(([x, y], i) => i ? ctx.lineTo(sx(x) + 15 * ppu, sy(y) - 15 * ppu) : ctx.moveTo(sx(x) + 15 * ppu, sy(y) - 15 * ppu)); ctx.stroke(); }
+    // cube (30x30 units)
+    const cx = sx(w.gd_x(SIM)), cy = sy(w.gd_y(SIM)) - 30 * ppu;
+    ctx.fillStyle = '#ffd84a'; ctx.fillRect(cx, cy, 30 * ppu, 30 * ppu); ctx.strokeStyle = '#000'; ctx.lineWidth = 2 * d; ctx.strokeRect(cx, cy, 30 * ppu, 30 * ppu);
+  }
+
+  function stats() {
+    const t = w.gd_tick(SIM), x = w.gd_x(SIM), y = w.gd_y(SIM);
+    const rows = [
+      ['tick', t], ['time', (t / TICK_HZ).toFixed(3) + ' s'], ['distance', (x / UNITS_PER_BLOCK).toFixed(2) + ' blocks'],
+      ['x speed', (SPEED_BPS[speed]).toFixed(3) + ' blocks/s'], ['height y', (y / UNITS_PER_BLOCK).toFixed(3) + ' blocks'],
+      ['y velocity', w.gd_vy(SIM).toFixed(3)], ['on ground', w.gd_on_ground(SIM) ? 'yes' : 'no'],
+      ['last apex', lastApex == null ? '-' : lastApex.toFixed(4) + ' blk (Δwiki ' + (lastApex - WIKI_JUMP >= 0 ? '+' : '') + (lastApex - WIKI_JUMP).toFixed(4) + ')'],
+      ['last air time', lastAir == null ? '-' : lastAir + ' ticks'], ['jumps', jumps], ['state hash', hex(w, SIM)],
+    ];
+    $('stats').innerHTML = rows.map(([k, v]) => k + ': <b>' + v + '</b>').join('<br>').split('<br>').map(l => '<div>' + l + '</div>').join('');
+  }
+  const SPEED_BPS = [0.7 * 5.98, 0.9 * 5.77, 1.1 * 5.87, 1.3 * 6.0, 1.6 * 6.0].map(v => v * 60 / 30);   // display only
+
+  function frame(now) {
+    const dt = Math.min((now - last) / 1000, 0.1); last = now;
+    if (!paused) { acc += dt * (slow ? 0.1 : 1) * TICK_HZ; let n = 0; while (acc >= 1 && n++ < 400) { tickOnce(); acc -= 1; } }
+    draw(); stats(); requestAnimationFrame(frame);
+  }
+
+  // ---- self tests (all run on the real WASM build) ----
+  function runTests() {
+    const out = []; const ok = (name, pass, detail) => out.push('<div class="' + (pass ? 'pass' : 'fail') + '">' + (pass ? 'PASS' : 'FAIL') + ' — ' + name + ' <span style="color:#889">' + detail + '</span></div>');
+    w.gd_reset(0, 0, 1); w.gd_run_parity(0, PARITY_TICKS); const h = hex(w, 0);
+    ok('parity: browser hash == native hash', h === GOLDEN_PARITY_HASH, h + ' vs ' + GOLDEN_PARITY_HASH);
+    w.gd_reset(0, 0, 1); for (let i = 0; i < TICK_HZ; i++) w.gd_step(0, 0);
+    const bps = w.gd_x(0) / UNITS_PER_BLOCK; ok('1x speed = 10.386 blocks/s', Math.abs(bps - 10.386) < 0.001, bps.toFixed(4));
+    w.gd_reset(0, 0, 1); w.gd_step(0, 1); let apex = 0, n = 1; while (!w.gd_on_ground(0)) { apex = Math.max(apex, w.gd_y(0)); w.gd_step(0, 0); n++; }
+    apex /= UNITS_PER_BLOCK; ok('jump apex within 0.02 of wiki 2.1333', Math.abs(apex - WIKI_JUMP) < 0.02, apex.toFixed(4) + ' blk, ' + n + ' ticks');
+    w.gd_reset(0, 0, 1); w.gd_run_parity(0, 5000); const a = hex(w, 0); w.gd_reset(0, 0, 1); w.gd_run_parity(0, 5000); ok('deterministic (same input -> same hash)', a === hex(w, 0), a);
+    ok('2.1 physics reports "not available yet"', w.gd_reset(0, 1, 1) === 0, 'expected until late step');
+    $('tests').innerHTML = out.join(''); return out.length;
+  }
+  $('test').onclick = runTests;
+
+  // headless hook used by scripts/parity.mjs
+  w.gd_reset(0, 0, 1); w.gd_run_parity(0, PARITY_TICKS);
+  window.__GD_RESULT__ = { hash: hex(w, 0), ticks: w.gd_tick(0) };
+
+  reset(); refreshButtons(); runTests(); requestAnimationFrame(frame);
 })();
 </script>
 </body>

@@ -68,3 +68,7 @@ pub extern "C" fn gd_x(i: u32) -> f64 { match slot(i) { Some(Some(s)) => s.x, _ 
 pub extern "C" fn gd_y(i: u32) -> f64 { match slot(i) { Some(Some(s)) => s.y, _ => 0.0 } }
 #[no_mangle]
 pub extern "C" fn gd_tick(i: u32) -> f64 { match slot(i) { Some(Some(s)) => s.tick as f64, _ => 0.0 } }
+#[no_mangle]
+pub extern "C" fn gd_vy(i: u32) -> f64 { match slot(i) { Some(Some(s)) => s.vy, _ => 0.0 } }
+#[no_mangle]
+pub extern "C" fn gd_on_ground(i: u32) -> u32 { match slot(i) { Some(Some(s)) => s.on_ground as u32, _ => 0 } }
