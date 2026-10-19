@@ -6,12 +6,13 @@
 <title>Geometry Clone</title>
 <style>
   html, body { margin: 0; height: 100%; background: #0d1020; color: #dfe6ff; font: 13px/1.4 ui-monospace, Menlo, Consolas, monospace; overflow: hidden; touch-action: none; user-select: none; -webkit-user-select: none; -webkit-tap-highlight-color: transparent; }
-  #wrap { display: grid; grid-template-rows: 1fr 282px; height: 100%; }
+  #wrap { display: grid; grid-template-rows: 1fr 318px; height: 100%; }
   #c { width: 100%; height: 100%; display: block; contain: strict; }
-  #panel { box-sizing: border-box; height: 282px; padding: 6px 12px; background: #070914; border-top: 1px solid #263; overflow: hidden; contain: strict; }
+  #panel { box-sizing: border-box; height: 318px; padding: 6px 12px; background: #070914; border-top: 1px solid #263; overflow: hidden; contain: strict; }
   #stats { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 0 12px; height: 74px; overflow: hidden; }
   #stats span b { color: #ffd84a; font-weight: normal; }
   .row { display: flex; flex-wrap: wrap; gap: 5px; align-items: center; margin-top: 4px; }
+  select { background: #1c2450; color: #dfe6ff; border: 1px solid #3a4890; border-radius: 6px; padding: 3px 6px; font: inherit; }
   button { background: #1c2450; color: #dfe6ff; border: 1px solid #3a4890; border-radius: 6px; padding: 4px 9px; font: inherit; cursor: pointer; }
   button.on { background: #3a4890; border-color: #8fa2ff; }
   #tests { height: 130px; overflow: auto; font-size: 12px; }
@@ -29,40 +30,95 @@
       <button id="qual">Quality: High (Q)</button><button id="test">Self-tests</button>
       <span class="dim">SPACE / click / touch = jump (hold to re-jump)</span>
     </div>
+    <div class="row">
+      <button id="cbf">Click-between-frames: on (C)</button>
+      <button id="extrap">Extrapolation: Smooth (E)</button>
+      <label class="dim">Render FPS <select id="cap"></select></label>
+      <span class="dim">physics is always 240 Hz</span>
+    </div>
     <div id="tests"></div>
   </div>
 </div>
 <script>
 // Single self-contained file: physics is the Rust core compiled to WASM, inlined below.
-const WASM_B64 = "AGFzbQEAAAABHAVgAX8Bf2ABfwF+YAN/f38Bf2ACf38AYAF/AXwDDAsAAQAAAgMDBAQEBAUDAQARBgkBfwFBgIDAAAsHeAsGbWVtb3J5AgAKZ2RfaGFzaF9oaQAACmdkX2hhc2hfbG8AAgxnZF9vbl9ncm91bmQAAwhnZF9yZXNldAAEDWdkX3J1bl9wYXJpdHkABQdnZF9zdGVwAAYHZ2RfdGljawAHBWdkX3Z5AAgEZ2RfeAAJBGdkX3kACgqwDws9AQF/QQAhAQJAIABBP0sNACAAQcgAbCIALQDigcCAAEECRg0AIABBoIHAgABqEIGAgIAAQiCIpyEBCyABC/AEAQF+IAApAzgiAUI4iCABQjCIQv8BgyABQiiIQv8BgyABQiCIQv8BgyABQhiIQv8BgyABQhCIQv8BgyABQgiIQv8BgyABQv8BgyAAKQMwIgFCOIggAUIwiEL/AYMgAUIoiEL/AYMgAUIgiEL/AYMgAUIYiEL/AYMgAUIQiEL/AYMgAUIIiEL/AYMgAUL/AYMgACkDKCIBQjiIIAFCMIhC/wGDIAFCKIhC/wGDIAFCIIhC/wGDIAFCGIhC/wGDIAFCEIhC/wGDIAFCCIhC/wGDIAFC/wGDIAApAyAiAUI4iCABQjCIQv8BgyABQiiIQv8BgyABQiCIQv8BgyABQhiIQv8BgyABQhCIQv8BgyABQgiIQv8BgyABQv8BgyAAMQBBQqXGiKHInKf5S4VCs4OAgIAgfiAAMQBAhUKzg4CAgCB+hUKzg4CAgCB+hUKzg4CAgCB+hUKzg4CAgCB+hUKzg4CAgCB+hUKzg4CAgCB+hUKzg4CAgCB+hUKzg4CAgCB+hUKzg4CAgCB+hUKzg4CAgCB+hUKzg4CAgCB+hUKzg4CAgCB+hUKzg4CAgCB+hUKzg4CAgCB+hUKzg4CAgCB+hUKzg4CAgCB+hUKzg4CAgCB+hUKzg4CAgCB+hUKzg4CAgCB+hUKzg4CAgCB+hUKzg4CAgCB+hUKzg4CAgCB+hUKzg4CAgCB+hUKzg4CAgCB+hUKzg4CAgCB+hUKzg4CAgCB+hUKzg4CAgCB+hUKzg4CAgCB+hUKzg4CAgCB+hUKzg4CAgCB+hUKzg4CAgCB+hUKzg4CAgCB+hUKzg4CAgCB+IAAxAEKFQrODgICAIH4LOgEBf0EAIQECQCAAQT9LDQAgAEHIAGwiAC0A4oHAgABBAkYNACAAQaCBwIAAahCBgICAAKchAQsgAQstAQF/QQAhAQJAIABBP0sNAEEAIABByABsLQDigcCAACIAIABBAkYbIQELIAEL2wEBA39BASEDQQAhBEEAIQUCQAJAAkAgAUH/AXEOAgABAgtBACEDQQAhBQwBC0EBIQVBACEDCwJAIABBP0sNACADIAJB/wFxQQRLciAFcg0AIABByABsQaCBwIAAaiIAQgA3AyAgAEIANwMoIABCADcDMCAAQgA3AzggAEGAAjsAQSAAQX8gAiACQf8BcUEESxs6AEAgACACQQN0QThxIgIrA/iAwIAAOQMYIAAgAisD0IDAgAA5AxAgACACKwOogMCAADkDCCAAIAIrA4CAwIAAOQMAQQEhBAsgBAuOAwMCfwZ8A34CQCAAQT9LDQAgAEHIAGwiAC0A4oHAgAAiAkECRg0AIAFFDQAgAEGggcCAAGoiAysDGETNzMzMzMzsP6JEAAAAAAAA0D+iIQQgAysDACADKwMIokQAAAAAAADQP6IhBSADKwMQIQYgAysDMCEHIAMrAzghCCADKwMoIQkgASEAIAMpAyAiCiELA0AgC0K3AoIhDCAHIAhEzczMzMzM7D+iRAAAAAAAANA/oqAhBwJAAkACQAJAAkAgCEQAAAAAAAAAAGVFDQAgB0QAAAAAAAAAAGUNAQsgAkEBcQ0BDAILIANBAToAQkQAAAAAAAAAACEHCwJAIAxCDFQgDELqfnxCFFRyDQBEAAAAAAAAAAAhCEEBIQIMAgsgA0EAOgBCIAYhCAtBACECIAggBKEiCEQAAAAAAAAuwGNFDQBEAAAAAAAALsAhCAsgBSAJoCEJIAtCAXwhCyAAQX9qIgANAAsgAyAIOQM4IAMgCTkDKCADIAc5AzAgAyAKIAFBf2qtfEIBfDcDIAsLrgICAX8EfAJAIABBP0sNACAAQcgAbCIALQDigcCAACICQQJGDQAgAEGggcCAAGoiACAAKwMAIAArAwiiRAAAAAAAANA/oiAAKwMooDkDKCAAIAArAzAgACsDOCIDRM3MzMzMzOw/okQAAAAAAADQP6KgIgQ5AzAgACsDGCEFIAArAxAhBgJAAkACQAJAAkAgA0QAAAAAAAAAAGVFDQAgBEQAAAAAAAAAAGUNAQsgAkEBcQ0BDAILIABBAToAQiAAQgA3AzALAkAgAQ0ARAAAAAAAAAAAIQMMAgsgAEEAOgBCIAYhAwsgAyAFRM3MzMzMzOy/okQAAAAAAADQP6KgIgNEAAAAAAAALsBjRQ0ARAAAAAAAAC7AIQMLIAAgAzkDOCAAIAApAyBCAXw3AyALCz4BAXxEAAAAAAAAAAAhAQJAIABBP0sNACAAQcgAbCIALQDigcCAAEECRg0AIABBoIHAgABqKQMguiEBCyABCz0BAXxEAAAAAAAAAAAhAQJAIABBP0sNACAAQcgAbCIALQDigcCAAEECRg0AIABBoIHAgABqKwM4IQELIAELPQEBfEQAAAAAAAAAACEBAkAgAEE/Sw0AIABByABsIgAtAOKBwIAAQQJGDQAgAEGggcCAAGorAyghAQsgAQs9AQF8RAAAAAAAAAAAIQECQCAAQT9LDQAgAEHIAGwiAC0A4oHAgABBAkYNACAAQaCBwIAAaisDMCEBCyABCwuzJQIAQYCAwAALoAFmZmZmZmbmP83MzMzMzOw/mpmZmZmZ8T/NzMzMzMz0P5qZmZmZmfk/7FG4HoXrF0AUrkfhehQXQHsUrkfhehdAAAAAAAAAGEAAAAAAAAAYQD0K16NwPSVAXI/C9ShcJkDXo3A9CtcmQPYoXI/CdSZA9ihcj8J1JkDCa5c2HBbuP7zqAfOQqe4/53EYzF+h7j87Vb5nJMLuPztVvmckwu4/AEGggcAAC4AkAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAAAAANsBBG5hbWUADQxnZF93YXNtLndhc20BnQELAApnZF9oYXNoX2hpATZfUk52TU50Q3MzVVFFdjNnMXd2NF83Z2RfY29yZTNzaW1OdEIyXzNTaW0xMHN0YXRlX2hhc2gCCmdkX2hhc2hfbG8DDGdkX29uX2dyb3VuZAQIZ2RfcmVzZXQFDWdkX3J1bl9wYXJpdHkGB2dkX3N0ZXAHB2dkX3RpY2sIBWdkX3Z5CQRnZF94CgRnZF95BxIBAA9fX3N0YWNrX3BvaW50ZXIJEQIABy5yb2RhdGEBBS5kYXRhAE0JcHJvZHVjZXJzAghsYW5ndWFnZQEEUnVzdAAMcHJvY2Vzc2VkLWJ5AQVydXN0Yx0xLjk3LjAgKDJkODE0NGI3OCAyMDI2LTA3LTA3KQCUAQ90YXJnZXRfZmVhdHVyZXMIKwtidWxrLW1lbW9yeSsPYnVsay1tZW1vcnktb3B0KxZjYWxsLWluZGlyZWN0LW92ZXJsb25nKwptdWx0aXZhbHVlKw9tdXRhYmxlLWdsb2JhbHMrE25vbnRyYXBwaW5nLWZwdG9pbnQrD3JlZmVyZW5jZS10eXBlcysIc2lnbi1leHQ=";
+const WASM_B64 = "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AAAAAAAAAAAAAAAAAgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAAAAAPUBBG5hbWUADQxnZF93YXNtLndhc20BtwENAAtnZF9leHRyYXBfeAELZ2RfZXh0cmFwX3kCCmdkX2hhc2hfaGkDNl9STnZNTnRDczNVUUV2M2cxd3Y0XzdnZF9jb3JlM3NpbU50QjJfM1NpbTEwc3RhdGVfaGFzaAQKZ2RfaGFzaF9sbwUMZ2Rfb25fZ3JvdW5kBghnZF9yZXNldAcNZ2RfcnVuX3Bhcml0eQgHZ2Rfc3RlcAkHZ2RfdGljawoFZ2RfdnkLBGdkX3gMBGdkX3kHEgEAD19fc3RhY2tfcG9pbnRlcgkRAgAHLnJvZGF0YQEFLmRhdGEATQlwcm9kdWNlcnMCCGxhbmd1YWdlAQRSdXN0AAxwcm9jZXNzZWQtYnkBBXJ1c3RjHTEuOTcuMCAoMmQ4MTQ0Yjc4IDIwMjYtMDctMDcpAJQBD3RhcmdldF9mZWF0dXJlcwgrC2J1bGstbWVtb3J5Kw9idWxrLW1lbW9yeS1vcHQrFmNhbGwtaW5kaXJlY3Qtb3ZlcmxvbmcrCm11bHRpdmFsdWUrD211dGFibGUtZ2xvYmFscysTbm9udHJhcHBpbmctZnB0b2ludCsPcmVmZXJlbmNlLXR5cGVzKwhzaWduLWV4dA==";
 const GOLDEN_PARITY_HASH = "22df837d8347f704";   // native result of the parity script (scripts/golden.json)
 const PARITY_TICKS = 100000;
-const TICK_HZ = 240, TICK_MS = 1000 / TICK_HZ, UPB = 30, WIKI_JUMP = 2.1333;
+const TICK_HZ = 240, TICK_MS = 1000 / TICK_HZ, UPB = 30, WIKI_JUMP = 2.1333;   // physics rate is FIXED at 240 Hz
 const SPEED_LABELS = ["0.5x", "1x", "2x", "3x", "4x"];
 const SPEED_BPS = [0.7 * 5.98, 0.9 * 5.77, 1.1 * 5.87, 1.3 * 6.0, 1.6 * 6.0].map(v => v * 60 / UPB);   // display only
 // Reference cube jump table (docs/03-cube-physics.md): [apex blocks, air ticks, distance blocks]
 const JUMP_REF = [[1.955, 100, 3.49], [2.128, 103, 4.457], [2.232, 106, 5.70], [2.147, 103, 6.69], [2.147, 103, 8.24]];
 const MAX_CATCHUP_MS = 100;   // never try to "catch up" more than this (tab was hidden / slow frame)
 const TRAIL_MAX = 160, TRAIL_EVERY = 4;   // keep every 4th tick (60 Hz) -> at most 160 points
+const CAPS = [[0, 'Display rate'], [30, '30'], [60, '60'], [90, '90'], [120, '120'], [144, '144'], [165, '165'], [240, '240'], [360, '360']];
+const EXTRAP = ['Off', 'Smooth', 'Predict'];   // Smooth: to the current time; Predict: to the estimated display time
 
 const $ = id => document.getElementById(id);
 function b64ToBytes(b64) { const bin = atob(b64), o = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) o[i] = bin.charCodeAt(i); return o; }
 const hex = (w, i) => (BigInt(w.gd_hash_hi(i) >>> 0) << 32n | BigInt(w.gd_hash_lo(i) >>> 0)).toString(16).padStart(16, '0');
+
+// ---------------------------------------------------------------------------------------------
+// Input/clock pipeline. Physics ticks are due every 1000/240 ms of wall time; this class decides
+// WHEN each tick runs and WHICH input state it sees. It knows nothing about rendering.
+//   cbf = true  (click-between-frames): an input event is applied at its own timestamp -- ticks up to
+//         the event run with the old input, ticks after it with the new one (like GD's CBF).
+//   cbf = false (vanilla): input is only sampled at frame start; every tick of that frame sees it.
+// ---------------------------------------------------------------------------------------------
+class Pipeline {
+  constructor(onTick, t0) { this.onTick = onTick; this.cbf = true; this.held = false; this.pending = null; this.pendingTs = 0;
+    this.paused = false; this.stepMs = TICK_MS; this.simNext = t0; this.lag = 0; this.firstHeldTick = -1; this.ticks = 0; }
+  advanceTo(t) {
+    if (this.paused) { this.simNext = t; return 0; }
+    if (t - this.simNext > MAX_CATCHUP_MS) this.simNext = t - this.stepMs;      // resync after a stall instead of spiralling
+    let n = 0;
+    while (this.simNext <= t) { if (this.held && this.firstHeldTick < 0) this.firstHeldTick = this.ticks; this.onTick(this.held); this.simNext += this.stepMs; this.ticks++; n++; }
+    return n;
+  }
+  // `ts` = event timestamp, `now` = current time (both ms, same clock)
+  setHeld(v, ts, now) {
+    if (this.cbf) {
+      if (this.held === v) return;
+      const t = Math.min(ts, now);
+      this.advanceTo(t); this.held = v; this.lag = now - t;
+    } else { this.pending = v; this.pendingTs = Math.min(ts, now); }
+  }
+  beginFrame(now) {
+    if (!this.cbf && this.pending !== null) { if (this.held !== this.pending) this.lag = now - this.pendingTs; this.held = this.pending; this.pending = null; }
+    return this.advanceTo(now);
+  }
+  // Wall-clock time of the most recent simulated tick
+  get lastTickTime() { return this.simNext - this.stepMs; }
+}
 
 (async () => {
   let w;
   try { w = (await WebAssembly.instantiate(b64ToBytes(WASM_B64), {})).instance.exports; }
   catch (e) { window.__GD_RESULT__ = { error: String(e) }; $('stats').textContent = 'WASM failed: ' + e; return; }
 
-  // ---------- state ----------
+  // ---------- game state ----------
   const SIM = 1;                                   // sim slot used by the player; slot 0 = self-tests
-  let speed = 1, held = false, paused = false, slow = false, lowQ = false;
-  let simNext = performance.now();                 // wall-clock time (ms) at which the next tick is due
+  let speed = 1, slow = false, lowQ = false, extrapMode = 1, fpsCap = 0, nextRenderAt = 0;
   let maxY = 0, lastApex = -1, airTicks = 0, lastAir = -1, wasGround = true, jumps = 0, sinceTrail = 0;
   const trailX = new Float32Array(TRAIL_MAX), trailY = new Float32Array(TRAIL_MAX); let trailN = 0, trailHead = 0;
   // perf counters
-  let fpsAcc = 0, fpsN = 0, worstMs = 0, simMsAcc = 0, drawMsAcc = 0, ticksAcc = 0, lastFrame = performance.now(), inputLag = 0;
-  let perf = { frameMs: 0, fps: 0, simMs: 0, drawMs: 0, ticksPerFrame: 0, worstMs: 0, inputLagMs: 0 };
+  let fpsAcc = 0, fpsN = 0, worstMs = 0, simMsAcc = 0, drawMsAcc = 0, ticksAcc = 0, lastFrame = performance.now(), tpsStart = performance.now(), tpsTicks = 0, frameEma = 16.7;
+  let perf = { frameMs: 16.7, fps: 60, simMs: 0, drawMs: 0, ticksPerFrame: 4, worstMs: 0, inputLagMs: 0, tps: 240 };
+
+  function tickOnce(held) {
+    w.gd_step(SIM, held ? 1 : 0); tpsTicks++;
+    const y = w.gd_y(SIM), g = w.gd_on_ground(SIM) === 1;
+    if (!g) {
+      airTicks++; if (y > maxY) maxY = y;
+      if (++sinceTrail >= TRAIL_EVERY) { sinceTrail = 0; trailX[trailHead] = w.gd_x(SIM); trailY[trailHead] = y; trailHead = (trailHead + 1) % TRAIL_MAX; if (trailN < TRAIL_MAX) trailN++; }
+    }
+    if (g && !wasGround) { lastApex = maxY / UPB; lastAir = airTicks; maxY = 0; jumps++; }
+    if (wasGround && !g) { airTicks = 1; maxY = y; trailN = 0; trailHead = 0; sinceTrail = 0; }
+    if (g && wasGround) airTicks = 0;
+    wasGround = g;
+  }
+  const pipe = new Pipeline(tickOnce, performance.now());
+  window.__GD_PIPE__ = pipe;
 
   // ---------- canvas (opaque + low latency hint) ----------
   const canvas = $('c');
@@ -92,63 +148,43 @@ const hex = (w, i) => (BigInt(w.gd_hash_hi(i) >>> 0) << 32n | BigInt(w.gd_hash_l
   }
   addEventListener('resize', resize); resize();
 
-  // ---------- simulation clock: ticks are driven by wall time, and by input timestamps ----------
-  function tickOnce() {
-    w.gd_step(SIM, held ? 1 : 0);
-    const y = w.gd_y(SIM), g = w.gd_on_ground(SIM) === 1;
-    if (!g) {
-      airTicks++; if (y > maxY) maxY = y;
-      if (++sinceTrail >= TRAIL_EVERY) { sinceTrail = 0; trailX[trailHead] = w.gd_x(SIM); trailY[trailHead] = y; trailHead = (trailHead + 1) % TRAIL_MAX; if (trailN < TRAIL_MAX) trailN++; }
-    }
-    if (g && !wasGround) { lastApex = maxY / UPB; lastAir = airTicks; maxY = 0; jumps++; }
-    if (wasGround && !g) { airTicks = 1; maxY = y; trailN = 0; trailHead = 0; sinceTrail = 0; }
-    if (g && wasGround) airTicks = 0;
-    wasGround = g;
-  }
-  // Run every tick that is due up to wall-clock time `t`. Returns ticks run.
-  function advanceTo(t) {
-    if (paused) { simNext = t; return 0; }
-    if (t - simNext > MAX_CATCHUP_MS) simNext = t - TICK_MS;   // resync after a stall instead of spiralling
-    let n = 0;
-    const step = slow ? TICK_MS * 10 : TICK_MS;
-    while (simNext <= t) { tickOnce(); simNext += step; n++; }
-    return n;
-  }
-  // Input is applied at its own timestamp: first simulate up to the event with the OLD input state,
-  // then flip the input. Even if the browser delivered the event late, the jump lands on the right tick.
-  function setHeld(v, ts) {
-    if (held === v) return;
-    const now = performance.now(), t = Math.min(ts || now, now);
-    advanceTo(t); held = v; inputLag = now - t;
-  }
-  function reset() { w.gd_reset(SIM, 0, speed); maxY = 0; lastApex = -1; lastAir = -1; airTicks = 0; wasGround = true; jumps = 0; trailN = 0; trailHead = 0; sinceTrail = 0; simNext = performance.now(); }
+  function reset() { w.gd_reset(SIM, 0, speed); maxY = 0; lastApex = -1; lastAir = -1; airTicks = 0; wasGround = true; jumps = 0; trailN = 0; trailHead = 0; sinceTrail = 0; pipe.simNext = performance.now(); pipe.firstHeldTick = -1; pipe.ticks = 0; }
 
   // ---------- UI ----------
   SPEED_LABELS.forEach((label, v) => { const b = document.createElement('button'); b.textContent = label; b.dataset.v = v; b.onclick = () => { speed = v; reset(); refresh(); }; $('speeds').appendChild(b); });
+  CAPS.forEach(([v, label]) => { const o = document.createElement('option'); o.value = v; o.textContent = label; $('cap').appendChild(o); });
+  $('cap').onchange = () => { fpsCap = +$('cap').value; nextRenderAt = 0; $('cap').blur(); };
   function refresh() {
     [...$('speeds').children].forEach(b => b.classList.toggle('on', +b.dataset.v === speed));
-    $('pause').classList.toggle('on', paused); $('slow').classList.toggle('on', slow);
+    $('pause').classList.toggle('on', pipe.paused); $('slow').classList.toggle('on', slow);
     $('qual').textContent = 'Quality: ' + (lowQ ? 'Low' : 'High') + ' (Q)'; $('qual').classList.toggle('on', lowQ);
+    $('cbf').textContent = 'Click-between-frames: ' + (pipe.cbf ? 'on' : 'off') + ' (C)'; $('cbf').classList.toggle('on', pipe.cbf);
+    $('extrap').textContent = 'Extrapolation: ' + EXTRAP[extrapMode] + ' (E)'; $('extrap').classList.toggle('on', extrapMode > 0);
   }
-  const togglePause = () => { paused = !paused; refresh(); };
-  const toggleSlow = () => { slow = !slow; refresh(); };
+  const togglePause = () => { pipe.paused = !pipe.paused; refresh(); };
+  const toggleSlow = () => { slow = !slow; pipe.stepMs = slow ? TICK_MS * 10 : TICK_MS; refresh(); };
   const toggleQual = () => { lowQ = !lowQ; resize(); refresh(); };
-  $('reset').onclick = reset; $('pause').onclick = togglePause; $('slow').onclick = toggleSlow; $('qual').onclick = toggleQual;
+  const toggleCbf = () => { pipe.cbf = !pipe.cbf; pipe.pending = null; refresh(); };
+  const cycleExtrap = () => { extrapMode = (extrapMode + 1) % EXTRAP.length; refresh(); };
+  $('reset').onclick = reset; $('pause').onclick = togglePause; $('slow').onclick = toggleSlow; $('qual').onclick = toggleQual; $('cbf').onclick = toggleCbf; $('extrap').onclick = cycleExtrap;
+  const press = e => pipe.setHeld(true, e.timeStamp, performance.now());
+  const release = e => pipe.setHeld(false, e.timeStamp, performance.now());
   addEventListener('keydown', e => {
     if (e.repeat) return;
-    if (e.code === 'Space' || e.code === 'ArrowUp') { e.preventDefault(); setHeld(true, e.timeStamp); }
+    if (e.code === 'Space' || e.code === 'ArrowUp') { e.preventDefault(); press(e); }
     else if (e.code === 'KeyR') reset(); else if (e.code === 'KeyP') togglePause(); else if (e.code === 'KeyS') toggleSlow(); else if (e.code === 'KeyQ') toggleQual();
+    else if (e.code === 'KeyC') toggleCbf(); else if (e.code === 'KeyE') cycleExtrap();
     else if (e.code >= 'Digit1' && e.code <= 'Digit5') { speed = +e.code.slice(5) - 1; reset(); refresh(); }
   });
-  addEventListener('keyup', e => { if (e.code === 'Space' || e.code === 'ArrowUp') setHeld(false, e.timeStamp); });
-  canvas.addEventListener('pointerdown', e => setHeld(true, e.timeStamp), { passive: true });
-  addEventListener('pointerup', e => setHeld(false, e.timeStamp), { passive: true });
-  addEventListener('pointercancel', e => setHeld(false, e.timeStamp), { passive: true });
-  addEventListener('blur', () => setHeld(false));
-  document.addEventListener('visibilitychange', () => { simNext = performance.now(); lastFrame = simNext; });
+  addEventListener('keyup', e => { if (e.code === 'Space' || e.code === 'ArrowUp') release(e); });
+  canvas.addEventListener('pointerdown', press, { passive: true });
+  addEventListener('pointerup', release, { passive: true });
+  addEventListener('pointercancel', release, { passive: true });
+  addEventListener('blur', () => pipe.setHeld(false, performance.now(), performance.now()));
+  document.addEventListener('visibilitychange', () => { pipe.simNext = performance.now(); lastFrame = pipe.simNext; });
 
   // stats: fixed set of nodes, text only rewritten when it changes, at ~8 Hz
-  const keys = ['tick', 'time', 'distance', 'x speed', 'height', 'y velocity', 'on ground', 'last apex', 'air time', 'jumps', 'hash', 'fps / frame', 'sim / draw', 'ticks/frame', 'worst frame', 'input->sim'];
+  const keys = ['tick', 'time', 'distance', 'x speed', 'height', 'y velocity', 'on ground', 'last apex', 'air time', 'jumps', 'hash', 'render fps', 'physics rate', 'sim / draw', 'ticks/frame', 'worst frame', 'input->sim'];
   const valEl = {}; keys.forEach(k => { const s = document.createElement('span'); s.append(k + ': '); const b = document.createElement('b'); s.append(b); $('stats').append(s); valEl[k] = b; });
   const prevTxt = {}; function put(k, v) { if (prevTxt[k] !== v) { prevTxt[k] = v; valEl[k].textContent = v; } }
   function updateStats() {
@@ -158,14 +194,19 @@ const hex = (w, i) => (BigInt(w.gd_hash_hi(i) >>> 0) << 32n | BigInt(w.gd_hash_l
     put('on ground', w.gd_on_ground(SIM) ? 'yes' : 'no');
     put('last apex', lastApex < 0 ? '-' : lastApex.toFixed(4) + ' (' + (lastApex - WIKI_JUMP >= 0 ? '+' : '') + (lastApex - WIKI_JUMP).toFixed(4) + ')');
     put('air time', lastAir < 0 ? '-' : lastAir + ' ticks'); put('jumps', jumps); put('hash', hex(w, SIM));
-    put('fps / frame', perf.fps.toFixed(0) + ' / ' + perf.frameMs.toFixed(1) + ' ms'); put('sim / draw', perf.simMs.toFixed(2) + ' / ' + perf.drawMs.toFixed(2) + ' ms');
-    put('ticks/frame', perf.ticksPerFrame.toFixed(1)); put('worst frame', perf.worstMs.toFixed(1) + ' ms'); put('input->sim', perf.inputLagMs.toFixed(1) + ' ms');
+    put('render fps', perf.fps.toFixed(0) + ' (' + perf.frameMs.toFixed(1) + ' ms)'); put('physics rate', perf.tps.toFixed(1) + ' Hz' + (slow ? ' (slow-mo)' : '') + (pipe.paused ? ' (paused)' : ''));
+    put('sim / draw', perf.simMs.toFixed(2) + ' / ' + perf.drawMs.toFixed(2) + ' ms');
+    put('ticks/frame', perf.ticksPerFrame.toFixed(1)); put('worst frame', perf.worstMs.toFixed(1) + ' ms'); put('input->sim', pipe.lag.toFixed(1) + ' ms');
   }
 
   // ---------- drawing: one blit + one grid path + one trail path + one rect ----------
-  function draw() {
+  // Visual position = real sim state + extrapolation. The sim itself is never touched by this.
+  function draw(tRender) {
+    let a = 0;                                                    // ticks past the last simulated tick
+    if (extrapMode > 0 && !pipe.paused) a = Math.max(0, (tRender - pipe.lastTickTime) / pipe.stepMs);
+    const px = a ? w.gd_extrap_x(SIM, a) : w.gd_x(SIM), py = a ? w.gd_extrap_y(SIM, a) : w.gd_y(SIM);
     ctx.drawImage(bg, 0, 0);
-    const camX = w.gd_x(SIM) - W * 0.25 / ppu, step = UPB * ppu;
+    const camX = px - W * 0.25 / ppu, step = UPB * ppu;
     if (!lowQ) {
       ctx.strokeStyle = 'rgba(255,255,255,0.07)'; ctx.lineWidth = Math.max(1, scale); ctx.beginPath();
       for (let gx = Math.floor(camX / UPB) * UPB; ; gx += UPB) { const x = Math.round((gx - camX) * ppu) + 0.5; if (x > W) break; ctx.moveTo(x, 0); ctx.lineTo(x, groundY); }
@@ -176,30 +217,35 @@ const hex = (w, i) => (BigInt(w.gd_hash_hi(i) >>> 0) << 32n | BigInt(w.gd_hash_l
         ctx.stroke();
       }
     }
-    const cx = Math.round((w.gd_x(SIM) - camX) * ppu), cy = Math.round(groundY - w.gd_y(SIM) * ppu - step), sz = Math.round(step);
+    const cx = Math.round((px - camX) * ppu), cy = Math.round(groundY - py * ppu - step), sz = Math.round(step);
     ctx.fillStyle = '#ffd84a'; ctx.fillRect(cx, cy, sz, sz);
     ctx.strokeStyle = '#000'; ctx.lineWidth = 2 * scale; ctx.strokeRect(cx, cy, sz, sz);
   }
 
-  // ---------- main loop ----------
+  // ---------- main loop: render rate is independent of physics ----------
   let statAt = 0;
   function frame(now) {
+    requestAnimationFrame(frame);
+    if (fpsCap > 0) {                                             // software render-rate cap (browser can't exceed the display rate)
+      const interval = 1000 / fpsCap;
+      if (now < nextRenderAt - 1) return;
+      nextRenderAt = Math.max(nextRenderAt + interval, now - interval);
+    }
     const t0 = performance.now();
-    const n = advanceTo(now > t0 ? t0 : now);          // rAF timestamp can be slightly ahead of now()
+    const tSim = Math.min(now, t0);                               // rAF timestamp can be slightly ahead of now()
+    const n = pipe.beginFrame(tSim);
     const t1 = performance.now();
-    draw();
+    draw(extrapMode === 2 ? tSim + frameEma : tSim);               // Predict: aim at when this frame will actually be shown
     const t2 = performance.now();
-    // perf accounting (cheap running averages)
     const fdt = now - lastFrame; lastFrame = now;
-    if (fdt > 0 && fdt < 1000) { fpsAcc += fdt; fpsN++; if (fdt > worstMs) worstMs = fdt; }
+    if (fdt > 0 && fdt < 1000) { fpsAcc += fdt; fpsN++; frameEma += (fdt - frameEma) * 0.1; if (fdt > worstMs) worstMs = fdt; }
     simMsAcc += t1 - t0; drawMsAcc += t2 - t1; ticksAcc += n;
     if (now - statAt > 125) {
-      if (fpsN) perf = { frameMs: fpsAcc / fpsN, fps: 1000 * fpsN / fpsAcc, simMs: simMsAcc / fpsN, drawMs: drawMsAcc / fpsN, ticksPerFrame: ticksAcc / fpsN, worstMs, inputLagMs: inputLag };
+      if (fpsN) { const tt = performance.now(); perf = { frameMs: fpsAcc / fpsN, fps: 1000 * fpsN / fpsAcc, simMs: simMsAcc / fpsN, drawMs: drawMsAcc / fpsN, ticksPerFrame: ticksAcc / fpsN, worstMs, tps: perf.tps }; if (tt - tpsStart >= 500) { perf.tps = tpsTicks * 1000 / (tt - tpsStart); tpsStart = tt; tpsTicks = 0; } }
       window.__GD_PERF__ = perf; fpsAcc = fpsN = simMsAcc = drawMsAcc = ticksAcc = 0;
       if (now - statAt > 2000) worstMs = 0;
       statAt = now; updateStats();
     }
-    requestAnimationFrame(frame);
   }
 
   // ---------- self tests (all run on the real WASM build, slot 0) ----------
@@ -207,6 +253,19 @@ const hex = (w, i) => (BigInt(w.gd_hash_hi(i) >>> 0) << 32n | BigInt(w.gd_hash_l
     w.gd_reset(0, 0, sp); w.gd_step(0, 1); let apex = 0, n = 0, xPrev = w.gd_x(0);
     for (;;) { xPrev = w.gd_x(0); w.gd_step(0, 0); n++; if (w.gd_on_ground(0)) break; apex = Math.max(apex, w.gd_y(0)); if (n > 5000) break; }
     return [apex / UPB, n, xPrev / UPB];
+  }
+  // Deliver one click at `clickTs` to a Pipeline running on virtual 60 fps frames, the way a browser does:
+  // the event is dispatched just before the rAF callback of the first frame that starts after it.
+  // Returns the tick at which the input first took effect, and how many ticks were already simulated
+  // when the click was delivered (= the first tick of the frame that sampled it).
+  function virtualClick(cbf, clickTs) {
+    w.gd_reset(0, 0, 1); const p = new Pipeline(h => w.gd_step(0, h ? 1 : 0), 0); p.cbf = cbf; let sent = false, prev = 0, ticksAtDelivery = -1;
+    for (let i = 0; i <= 12; i++) {
+      const f = i * 1000 / 60;
+      if (!sent && clickTs > prev && clickTs <= f) { ticksAtDelivery = p.ticks; p.setHeld(true, clickTs, f); sent = true; }
+      p.beginFrame(f); prev = f;
+    }
+    return { first: p.firstHeldTick, ticksAtDelivery };
   }
   function runTests() {
     const out = []; const ok = (name, pass, detail) => out.push('<div class="' + (pass ? 'pass' : 'fail') + '">' + (pass ? 'PASS' : 'FAIL') + ' ' + name + ' <span class="dim">' + detail + '</span></div>');
@@ -222,6 +281,22 @@ const hex = (w, i) => (BigInt(w.gd_hash_hi(i) >>> 0) << 32n | BigInt(w.gd_hash_l
     const j1 = jumpProfile(1)[0]; ok('1x apex vs published 2.1333', Math.abs(j1 - WIKI_JUMP) < 0.005, j1.toFixed(4));
     w.gd_reset(0, 0, 1); w.gd_run_parity(0, 5000); const a = hex(w, 0); w.gd_reset(0, 0, 1); w.gd_run_parity(0, 5000); ok('deterministic', a === hex(w, 0), a);
     ok('2.1 not available yet', w.gd_reset(0, 1, 1) === 0, 'expected');
+
+    // extrapolation: predicted state == real stepping, and never changes the sim
+    w.gd_reset(0, 0, 1); w.gd_step(0, 1); for (let i = 0; i < 5; i++) w.gd_step(0, 0);
+    const hb = hex(w, 0), ex = [w.gd_extrap_x(0, 12), w.gd_extrap_y(0, 12)], pure = hb === hex(w, 0);
+    for (let i = 0; i < 12; i++) w.gd_step(0, 0);
+    const err = Math.max(Math.abs(ex[0] - w.gd_x(0)), Math.abs(ex[1] - w.gd_y(0)));
+    ok('extrapolation = real stepping (12 ticks)', err < 1e-6 && pure, 'max error ' + err.toExponential(1) + ' units; sim untouched: ' + pure);
+
+    // click-between-frames on virtual time: 60 fps frames, click lands 7.3 ms into a 16.7 ms frame
+    const click = 100 + 7.3, want = Math.ceil(click / TICK_MS);
+    const on = virtualClick(true, click), off = virtualClick(false, click);
+    ok('CBF on: input lands on the click\'s own tick', on.first === want, 'tick ' + on.first + ' (expected ' + want + '; click at ' + click.toFixed(1) + ' ms)');
+    ok('CBF off: input applies from the frame\'s first tick (vanilla)', off.first === off.ticksAtDelivery && off.first <= on.first,
+       'tick ' + off.first + ' = start of that frame, ' + ((on.first - off.first) * TICK_MS).toFixed(1) + ' ms before the real click');
+    const counts = [30, 60, 144, 240].map(fps => { let tc = 0; const q = new Pipeline(() => tc++, 0); for (let i = 0; i <= fps; i++) q.beginFrame(i * 1000 / fps); return tc; });
+    ok('240 physics ticks/s at 30/60/144/240 render fps', counts.every(c => Math.abs(c - 240) <= 1), counts.join(' / ') + ' ticks in 1 s');
     $('tests').innerHTML = out.join('');
   }
   $('test').onclick = runTests;

@@ -12,6 +12,7 @@ Progress is tracked per step; see `docs/`.
 | `docs/01-physics-spec.md` | Physics spec with confidence tags and open questions |
 | `docs/02-architecture.md` | Step 2: layout, rules, how to build and test |
 | `docs/03-cube-physics.md` | Step 3: cube physics on flat ground, results, open questions |
+| `docs/render-input.md` | Render FPS cap, frame extrapolation, click-between-frames |
 | `docs/research/step3-research.md` | Research notes: integration order, hitboxes, reference tables, replay formats |
 
 ## Quick start (home PC)

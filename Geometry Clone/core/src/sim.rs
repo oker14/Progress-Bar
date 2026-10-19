@@ -76,6 +76,22 @@ impl Sim {
         self.tick += 1;
     }
 
+    /// VISUAL ONLY. Predicts the cube position `ticks` ticks after the current state (fractional ok),
+    /// assuming no input change and no collision other than the floor. Never fed back into the sim;
+    /// the renderer uses it to draw smoothly at any frame rate while physics stays at 240 Hz.
+    /// For whole numbers of ticks in free flight it equals stepping the sim exactly.
+    pub fn extrapolate(&self, ticks: f64) -> (f64, f64) {
+        let x = self.x + self.x_per_tick() * ticks;
+        if self.on_ground {
+            return (x, self.y);
+        }
+        // y_n = y + 0.225 * (n*vy - G*n*(n-1)/2), G = per-tick velocity loss
+        let g_tick = self.params.gravity * Y_TIME_SCALE * TICK_FRAMES;
+        let dy = Y_TIME_SCALE * TICK_FRAMES * (self.vy * ticks - 0.5 * g_tick * ticks * (ticks - 1.0));
+        let y = self.y + dy;
+        (x, if y < 0.0 { 0.0 } else { y })
+    }
+
     /// Hash of every state field that affects the future. Add fields here as the sim grows.
     pub fn state_hash(&self) -> u64 {
         let mut h = Fnv64::new();
@@ -211,6 +227,40 @@ mod tests {
         }
         assert_eq!(jumps, 10, "one jump every 103 ticks");
         assert_eq!(gaps, 0, "never sits on the ground while held");
+    }
+
+    #[test]
+    fn extrapolation_matches_real_stepping_in_free_flight() {
+        let mut s = Sim::new(V22, Speed::Normal).unwrap();
+        s.step(true);
+        for _ in 0..5 {
+            s.step(false);
+        }
+        assert!(!s.on_ground);
+        for n in 0..=40u32 {
+            let (ex, ey) = s.extrapolate(n as f64);
+            let mut r = s;
+            for _ in 0..n {
+                r.step(false);
+            }
+            assert!((ex - r.x).abs() < 1e-9 && (ey - r.y).abs() < 1e-9, "n={n}: ({ex},{ey}) vs ({},{})", r.x, r.y);
+        }
+    }
+
+    #[test]
+    fn extrapolation_never_goes_below_floor_and_is_pure() {
+        let mut s = Sim::new(V22, Speed::Normal).unwrap();
+        s.step(true);
+        for _ in 0..90 {
+            s.step(false);
+        }
+        let before = s.state_hash();
+        let (_, y) = s.extrapolate(50.0);
+        assert!(y >= 0.0);
+        assert_eq!(before, s.state_hash(), "extrapolate must not touch state");
+        let g = Sim::new(V22, Speed::Normal).unwrap();
+        assert_eq!(g.extrapolate(3.5).1, 0.0);
+        assert!((g.extrapolate(3.5).0 - 3.5 * g.x_per_tick()).abs() < 1e-12);
     }
 
     #[test]

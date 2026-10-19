@@ -72,3 +72,8 @@ pub extern "C" fn gd_tick(i: u32) -> f64 { match slot(i) { Some(Some(s)) => s.ti
 pub extern "C" fn gd_vy(i: u32) -> f64 { match slot(i) { Some(Some(s)) => s.vy, _ => 0.0 } }
 #[no_mangle]
 pub extern "C" fn gd_on_ground(i: u32) -> u32 { match slot(i) { Some(Some(s)) => s.on_ground as u32, _ => 0 } }
+/// Visual-only prediction `ticks` ticks ahead (see Sim::extrapolate). Does not change the sim.
+#[no_mangle]
+pub extern "C" fn gd_extrap_x(i: u32, ticks: f64) -> f64 { match slot(i) { Some(Some(s)) => s.extrapolate(ticks).0, _ => 0.0 } }
+#[no_mangle]
+pub extern "C" fn gd_extrap_y(i: u32, ticks: f64) -> f64 { match slot(i) { Some(Some(s)) => s.extrapolate(ticks).1, _ => 0.0 } }
