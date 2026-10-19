@@ -1,0 +1,11 @@
+[package]
+name = "gd-cli"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "gd"
+path = "src/main.rs"
+
+[dependencies]
+gd-core = { path = "../core" }

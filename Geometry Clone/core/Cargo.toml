@@ -1,0 +1,7 @@
+[package]
+name = "gd-core"
+version = "0.1.0"
+edition = "2021"
+description = "Deterministic Geometry Dash physics core (no_std, no dependencies)"
+
+[dependencies]

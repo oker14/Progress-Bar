@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Geometry Clone</title>
+<style>
+  body { margin: 0; background: #111; color: #eee; font: 16px/1.5 monospace; padding: 16px; }
+  pre { white-space: pre-wrap; }
+</style>
+</head>
+<body>
+<h3>Geometry Clone &mdash; step 2 smoke test</h3>
+<pre id="out">loading...</pre>
+<script>
+// Everything is inlined so this file works when double-clicked (file://), offline, on a Chromebook.
+const WASM_B64 = "__WASM_B64__";
+const PARITY_TICKS = 100000;
+
+function b64ToBytes(b64) {
+  const bin = atob(b64), out = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  return out;
+}
+(async () => {
+  const out = document.getElementById('out');
+  try {
+    const { instance } = await WebAssembly.instantiate(b64ToBytes(WASM_B64), {});
+    const w = instance.exports;
+    if (!w.gd_reset(0, 0, 1)) throw new Error('gd_reset failed');
+    const t0 = performance.now();
+    w.gd_run_parity(0, PARITY_TICKS);
+    const ms = performance.now() - t0;
+    const hash = (BigInt(w.gd_hash_hi(0) >>> 0) << 32n | BigInt(w.gd_hash_lo(0) >>> 0)).toString(16).padStart(16, '0');
+    window.__GD_RESULT__ = { hash, ticks: w.gd_tick(0) };
+    out.textContent = 'wasm ok\nticks: ' + w.gd_tick(0) + '\nstate hash: ' + hash +
+      '\nspeed: ' + (PARITY_TICKS / ms / 1000).toFixed(1) + ' M ticks/s in this browser';
+  } catch (e) {
+    window.__GD_RESULT__ = { error: String(e) };
+    out.textContent = 'FAILED: ' + e;
+  }
+})();
+</script>
+</body>
+</html>
