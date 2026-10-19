@@ -4,7 +4,8 @@ Physics is **fixed at 240 Hz in every mode**. Render rate, extrapolation and inp
 
 ## Render FPS
 - Rendering runs on `requestAnimationFrame` (the browser's display rate) with an optional **render FPS cap**: Display rate, 30, 60, 90, 120, 144, 165, 240, 360.
-- A browser cannot render faster than the display's refresh rate; caps above it behave like "Display rate". The native build will have no such limit.
+- Any cap from 1 to 100000 can be typed into the custom box; the dropdown has presets up to 1000 and "Unlimited". A browser still shows at most one frame per display refresh, so caps above it behave like "Unlimited". The native build has no such limit (vsync off).
+- Above 240 fps there are fewer than one physics tick per frame; extrapolation is what makes every frame a distinct position (virtual-time tests at 480 and 1000 fps: 240 ticks/s, every frame a new, strictly increasing position). Without extrapolation those frames would repeat the last tick (an effective 240 fps).
 - Ticks per frame adapt automatically (e.g. 8 at 30 fps, 4 at 60, ~1.7 at 144). Measured in headless Chrome: 240.0 Hz physics at 30 and 60 fps.
 - A stall longer than 100 ms resyncs instead of fast-forwarding (no spiral of death).
 
