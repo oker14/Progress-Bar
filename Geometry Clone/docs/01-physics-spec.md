@@ -1,5 +1,7 @@
 # Step 1 — Physics Spec (GD 2.2 first, versioned for 2.1 later)
 
+> **Corrected in step 3:** vertical motion uses an extra 0.9 time scale (`y += yVel*0.9*dt`, gravity `g*0.9*dt`), so the 1x jump lasts 103 ticks, not 93. Section 4's "93 ticks" cross-check is superseded by `docs/03-cube-physics.md`. Hitbox numbers (section 6 gaps) are now in `docs/research/step3-research.md`.
+
 Status: **DRAFT v0.1**. Every item carries a confidence tag:
 - **[V]** verified: read from reconstructed 2.2 game code *and* cross-checked against a known number
 - **[R]** read from reconstructed code, not yet cross-checked

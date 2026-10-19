@@ -1,14 +1,16 @@
 // Parity check: native hash == WASM-in-Node hash == WASM-in-Chrome-from-file:// hash.
 // Usage (from "Geometry Clone/"): node scripts/parity.mjs
 import { execFileSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { createRequire } from 'node:module';
 import { execSync } from 'node:child_process';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
-const TICKS = 100000;
+const goldenPath = join(root, 'scripts/golden.json');
+const golden = JSON.parse(readFileSync(goldenPath, 'utf8'));
+const TICKS = golden.parityTicks;
 
 const native = execFileSync('cargo', ['run', '-q', '--release', '-p', 'gd-cli', '--', 'parity', String(TICKS)],
   { cwd: root }).toString().trim();
@@ -32,7 +34,12 @@ try {
   await browser.close();
 } catch (e) { if (!/Cannot find (module|package)/.test(String(e))) chrome = 'ERROR ' + e.message; }
 
-console.log({ native, node, chrome });
-const ok = native === node && (chrome.startsWith('(skipped') || chrome === native);
+if (process.argv.includes('--update')) {
+  writeFileSync(goldenPath, JSON.stringify({ parityTicks: TICKS, hash: native }, null, 2) + '\n');
+  console.log('golden hash updated to', native, '(rebuild the bundle: node scripts/bundle.mjs)');
+  process.exit(0);
+}
+console.log({ golden: golden.hash, native, node, chrome });
+const ok = native === golden.hash && native === node && (chrome.startsWith('(skipped') || chrome === native);
 console.log(ok ? 'PARITY OK' : 'PARITY FAIL');
 process.exit(ok ? 0 : 1);
